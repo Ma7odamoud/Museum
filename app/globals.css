@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-museum-dark text-museum-ivory font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-serif;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-museum-sky-accent/50 hover:bg-museum-sky-accent/80 rounded-full transition-colors;
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-museum-rose/50 hover:bg-museum-rose/80;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Glass effect with romantic rose border */
+  .glass-effect {
+    @apply bg-white/60 dark:bg-museum-card/80 backdrop-blur-md border border-white/40 dark:border-museum-rose-muted/30 shadow-lg;
+  }
+
+  /* Rich rose gradient for buttons and accents */
+  .rose-gradient {
+    background: linear-gradient(135deg, #e11d48 0%, #fb7185 100%);
+  }
+
+  /* Modern Title Bar */
+  .modern-title-bar {
+    @apply inline-block px-8 py-3 rounded-full text-white font-serif shadow-lg backdrop-blur-sm transition-all duration-300 transform hover:scale-105;
+    background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+    /* Light Mode: Sky Blue */
+    box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.3);
+  }
+
+  .dark .modern-title-bar {
+    background: linear-gradient(135deg, #e11d48 0%, #fb7185 100%);
+    /* Dark Mode: Rose */
+    box-shadow: 0 10px 25px -5px rgba(225, 29, 72, 0.3);
+  }
+
+
+
+  /* Romantic floating card effect */
+  .museum-card {
+    @apply bg-white dark:bg-museum-card border border-slate-200 dark:border-museum-rose-muted/20;
+    box-shadow: 0 0 15px rgba(14, 165, 233, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .dark .museum-card {
+    box-shadow: 0 0 15px rgba(225, 29, 72, 0.1);
+  }
+
+  .museum-card:hover {
+    box-shadow: 0 0 25px rgba(14, 165, 233, 0.2), 0 8px 32px rgba(14, 165, 233, 0.15);
+    transform: translateY(-2px);
+  }
+
+  .dark .museum-card:hover {
+    box-shadow: 0 0 25px rgba(225, 29, 72, 0.2), 0 8px 32px rgba(225, 29, 72, 0.15);
+  }
+
+  /* Legacy shadow for compatibility */
+  .museum-shadow {
+    box-shadow: 0 0 15px rgba(225, 29, 72, 0.1);
+  }
+
+  /* Elegant rose glow effect */
+  .rose-glow {
+    box-shadow: 0 0 20px rgba(225, 29, 72, 0.15), 0 0 40px rgba(225, 29, 72, 0.08);
+  }
+
+  /* Subtle ivory glow for text highlights */
+  .ivory-glow {
+    text-shadow: 0 0 10px rgba(245, 245, 220, 0.3);
+  }
+
+  /* Masonry Grid Layout - Switched to Grid for Stability */
+  .masonry-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  @media (min-width: 768px) {
+    .masonry-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .masonry-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .masonry-item {
+    width: 100%;
+  }
+
+  /* Fix for UploadThing native input showing up */
+  .upload-button-wrapper input[type="file"] {
+    opacity: 0 !important;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: pointer !important;
+    z-index: 10 !important;
+  }
+}
