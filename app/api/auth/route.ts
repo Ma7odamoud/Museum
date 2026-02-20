@@ -11,9 +11,10 @@ export async function POST(request: Request) {
         if (password === CORRECT_PASSWORD) {
             // Set authentication cookie (not httpOnly so client can read it)
             cookies().set(AUTH_COOKIE_NAME, 'authenticated', {
-                httpOnly: false, // Allow client-side reading
+                httpOnly: false,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
+                path: '/',
                 maxAge: 60 * 60 * 24 * 30, // 30 days
             })
 

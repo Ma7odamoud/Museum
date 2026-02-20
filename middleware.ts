@@ -6,10 +6,11 @@ export function middleware(request: NextRequest) {
     const isAuthenticated = authCookie?.value === 'authenticated'
 
     // Protect all routes except the gatekeeper and API routes
+    const path = request.nextUrl.pathname
     const isProtectedRoute =
-        request.nextUrl.pathname.startsWith('/hallway') ||
-        request.nextUrl.pathname.startsWith('/room') ||
-        request.nextUrl.pathname.startsWith('/admin')
+        path.startsWith('/hallway') ||
+        path.startsWith('/room') ||
+        path.startsWith('/admin')
 
     if (isProtectedRoute && !isAuthenticated) {
         return NextResponse.redirect(new URL('/', request.url))
