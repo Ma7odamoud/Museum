@@ -3,7 +3,6 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getCookie } from 'cookies-next'
 import MasonryGallery from '@/components/MasonryGallery'
 import UploadButton from '@/components/UploadButton'
 
@@ -48,13 +47,6 @@ export default function RoomPage() {
     const [isExiting, setIsExiting] = useState(false)
 
     useEffect(() => {
-        // Check authentication
-        const authCookie = getCookie('museum_auth')
-        if (authCookie !== 'authenticated') {
-            router.push('/')
-            return
-        }
-
         async function fetchRoom() {
             try {
                 const response = await fetch(`/api/rooms/${slug}`)
