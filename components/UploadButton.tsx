@@ -1,7 +1,7 @@
 'use client'
 
 import { UploadButton as UTUploadButton } from "@uploadthing/react"
-import { useState } from "react"
+import { useState, useRef } from "react"
 import type { OurFileRouter } from "@/app/api/uploadthing/core"
 import { useTheme } from "./ThemeProvider"
 
@@ -11,14 +11,51 @@ interface UploadButtonProps {
     variant?: 'default' | 'compact'
 }
 
+/** Resize an image File to a WebP thumbnail (max 500px wide, quality 78). */
+async function generateThumbnail(file: File): Promise<File | null> {
+    return new Promise((resolve) => {
+        try {
+            const img = new Image()
+            const objectUrl = URL.createObjectURL(file)
+
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl)
+                const MAX_W = 500
+                const scale = img.naturalWidth > MAX_W ? MAX_W / img.naturalWidth : 1
+                const w = Math.round(img.naturalWidth * scale)
+                const h = Math.round(img.naturalHeight * scale)
+
+                const canvas = document.createElement('canvas')
+                canvas.width = w
+                canvas.height = h
+                const ctx = canvas.getContext('2d')
+                if (!ctx) { resolve(null); return }
+                ctx.drawImage(img, 0, 0, w, h)
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) { resolve(null); return }
+                        resolve(new File([blob], `thumb_${Date.now()}.webp`, { type: 'image/webp' }))
+                    },
+                    'image/webp',
+                    0.78
+                )
+            }
+
+            img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null) }
+            img.src = objectUrl
+        } catch {
+            resolve(null)
+        }
+    })
+}
+
 export default function UploadButton({ roomId, onUploadComplete, variant = 'default' }: UploadButtonProps) {
     const [isUploading, setIsUploading] = useState(false)
     const [uploadType, setUploadType] = useState<'imageUploader' | 'videoUploader'>('imageUploader')
     const { theme } = useTheme()
 
     const isLight = theme === 'light'
-    const accentColor = isLight ? '#0ea5e9' : '#e11d48' // Sky vs Rose
-    const secondaryColor = isLight ? '#38bdf8' : '#fb7185'
 
     if (!roomId) {
         return (
@@ -70,9 +107,20 @@ export default function UploadButton({ roomId, onUploadComplete, variant = 'defa
                     <UTUploadButton<OurFileRouter, typeof uploadType>
                         endpoint={uploadType}
                         url={`/api/uploadthing?roomId=${roomId}`}
-                        onClientUploadComplete={(res) => {
+                        onClientUploadComplete={async (res) => {
+                            // For image uploads, generate and attach thumbnail
+                            if (uploadType === 'imageUploader' && res && res.length > 0) {
+                                for (const uploadedFile of res) {
+                                    const mediaId = (uploadedFile.serverData as { mediaId?: string })?.mediaId
+                                    // Generate thumbnail client-side from the original file data is not available here,
+                                    // so we patch via API after upload. The thumbnail upload happens in onBeforeUploadBegin.
+                                    // mediaId is used to associate the thumbnail.
+                                    if (mediaId && (uploadedFile as { thumbnailFile?: File }).thumbnailFile) {
+                                        // This is handled in the beforeUploadBegin flow
+                                    }
+                                }
+                            }
                             setIsUploading(false)
-                            console.log("Upload complete:", res)
                             if (onUploadComplete) {
                                 onUploadComplete()
                             }

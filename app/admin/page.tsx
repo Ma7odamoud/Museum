@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, FormEvent } from 'react'
+import { useEffect, useState, FormEvent, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import UploadButton from '@/components/UploadButton'
@@ -105,6 +105,64 @@ export default function AdminPage() {
     const [playlistId, setPlaylistId] = useState('')
     const [importRoomId, setImportRoomId] = useState('')
     const [isImporting, setIsImporting] = useState(false)
+
+    // Optimize existing Supabase images state
+    type OptimizeStats = { totalLegacy: number; alreadyOptimized: number; remaining: number; pct: number }
+    type OptimizeLog = { status: 'ok' | 'skipped' | 'error'; id: string; url: string; error?: string }
+    const [optimizeStats, setOptimizeStats] = useState<OptimizeStats | null>(null)
+    const [isOptimizing, setIsOptimizing] = useState(false)
+    const [optimizeLogs, setOptimizeLogs] = useState<OptimizeLog[]>([])
+    const [optimizeOffset, setOptimizeOffset] = useState(0)
+    const [optimizePaused, setOptimizePaused] = useState(false)
+    const optimizePausedRef = useRef(false)
+
+    const fetchOptimizeStats = async () => {
+        try {
+            const res = await fetch('/api/admin/optimize-images')
+            if (res.ok) setOptimizeStats(await res.json())
+        } catch { /* silent */ }
+    }
+
+    const runOptimizeBatch = async (offset: number, batchSize: number, retryFailed = false) => {
+        const res = await fetch('/api/admin/optimize-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batchSize, offset, retryFailed }),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return await res.json()
+    }
+
+    const handleOptimizeAll = async (batchSize = 5, retryFailed = false) => {
+        setIsOptimizing(true)
+        setOptimizePaused(false)
+        optimizePausedRef.current = false
+        setOptimizeLogs([])
+        let currentOffset = retryFailed ? 0 : optimizeOffset
+        if (!retryFailed) setOptimizeOffset(0), currentOffset = 0
+
+        try {
+            while (true) {
+                if (optimizePausedRef.current) break
+                const data = await runOptimizeBatch(currentOffset, batchSize, retryFailed)
+                setOptimizeLogs(prev => [...prev, ...(data.results || [])])
+                if (data.stats) setOptimizeStats(data.stats)
+                currentOffset = data.nextOffset ?? currentOffset + batchSize
+                setOptimizeOffset(currentOffset)
+                if (!data.hasMore || optimizePausedRef.current) break
+            }
+        } catch (err) {
+            console.error('Optimize error:', err)
+        } finally {
+            setIsOptimizing(false)
+        }
+    }
+
+    const handlePauseOptimize = () => {
+        optimizePausedRef.current = true
+        setOptimizePaused(true)
+    }
+
 
     useEffect(() => {
         const adminCookie = getCookie(ADMIN_COOKIE)
@@ -696,6 +754,107 @@ export default function AdminPage() {
                     </div >
                 </motion.section >
             </div >
+
+            {/* ── Optimize Existing Supabase Images ───────────────────────────── */}
+            <div className="mt-10">
+                <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                    <h2 className="text-2xl font-serif text-museum-sky-accent dark:text-museum-rose mb-6">🖼️ Optimize Existing Supabase Images</h2>
+                    <div className="glass-effect rounded-2xl p-6 space-y-6">
+                        {/* Stats */}
+                        <div>
+                            {!optimizeStats ? (
+                                <button
+                                    onClick={fetchOptimizeStats}
+                                    className="px-5 py-2.5 rounded-lg bg-museum-sky-accent hover:bg-museum-sky-dark dark:bg-museum-rose dark:hover:bg-museum-rose-light text-white font-semibold text-sm transition-colors"
+                                >
+                                    Load Stats
+                                </button>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {[
+                                            { label: 'Total Legacy Images', value: optimizeStats.totalLegacy },
+                                            { label: 'Already Optimized', value: optimizeStats.alreadyOptimized },
+                                            { label: 'Remaining', value: optimizeStats.remaining },
+                                            { label: 'Progress', value: `${optimizeStats.pct}%` },
+                                        ].map(({ label, value }) => (
+                                            <div key={label} className="bg-white/50 dark:bg-white/5 rounded-xl p-4 text-center">
+                                                <div className="text-2xl font-bold text-museum-sky-accent dark:text-museum-rose">{value}</div>
+                                                <div className="text-xs text-slate-500 dark:text-museum-cream/50 mt-1">{label}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {/* Progress bar */}
+                                    <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-2.5">
+                                        <div
+                                            className="bg-gradient-to-r from-museum-sky-accent to-sky-400 dark:from-museum-rose dark:to-rose-400 h-2.5 rounded-full transition-all duration-500"
+                                            style={{ width: `${optimizeStats.pct}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap gap-3">
+                            <button
+                                onClick={() => handleOptimizeAll(5)}
+                                disabled={isOptimizing}
+                                className="px-5 py-2.5 rounded-lg bg-museum-sky-accent hover:bg-museum-sky-dark dark:bg-museum-rose dark:hover:bg-museum-rose-light text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isOptimizing ? '⏳ Processing...' : '▶ Run Test Batch (5 images)'}
+                            </button>
+                            <button
+                                onClick={() => handleOptimizeAll(10)}
+                                disabled={isOptimizing}
+                                className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                🚀 Start Full Optimization (10/batch)
+                            </button>
+                            <button
+                                onClick={() => handleOptimizeAll(5, true)}
+                                disabled={isOptimizing}
+                                className="px-5 py-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                🔁 Retry Failed
+                            </button>
+                            {isOptimizing && (
+                                <button
+                                    onClick={handlePauseOptimize}
+                                    className="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-museum-rose/30 text-slate-600 dark:text-museum-cream hover:bg-slate-100 dark:hover:bg-white/10 font-semibold text-sm transition-colors"
+                                >
+                                    ⏸ Pause
+                                </button>
+                            )}
+                            <button
+                                onClick={fetchOptimizeStats}
+                                className="px-5 py-2.5 rounded-lg border border-slate-300 dark:border-museum-rose/30 text-slate-600 dark:text-museum-cream hover:bg-slate-100 dark:hover:bg-white/10 font-semibold text-sm transition-colors"
+                            >
+                                🔄 Refresh Stats
+                            </button>
+                        </div>
+
+                        {/* Log output */}
+                        {optimizeLogs.length > 0 && (
+                            <div className="max-h-64 overflow-y-auto bg-slate-50 dark:bg-black/20 rounded-xl p-4 font-mono text-xs space-y-1">
+                                {optimizeLogs.map((log, i) => (
+                                    <div key={i} className={
+                                        log.status === 'ok' ? 'text-green-600 dark:text-green-400'
+                                        : log.status === 'error' ? 'text-red-500 dark:text-red-400'
+                                        : 'text-slate-400'
+                                    }>
+                                        {log.status === 'ok' ? '✅' : log.status === 'error' ? '❌' : '⏭'} {log.url.split('/').slice(-1)[0]}
+                                        {log.error && <span className="ml-2 opacity-70">— {log.error}</span>}
+                                    </div>
+                                ))}
+                                {isOptimizing && <div className="text-museum-sky-accent dark:text-museum-rose animate-pulse">⏳ Processing...</div>}
+                                {optimizePaused && !isOptimizing && <div className="text-amber-500">⏸ Paused at offset {optimizeOffset}</div>}
+                            </div>
+                        )}
+                    </div>
+                </motion.section>
+            </div>
+
             {/* Sync Logs Modal */}
             <AnimatePresence>
                 {

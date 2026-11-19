@@ -12,6 +12,7 @@ import { useSignedUrls } from '@/lib/use-signed-urls'
 interface MediaItem {
     id: string
     url: string
+    thumbnailUrl?: string | null
     type: string
 }
 
@@ -111,11 +112,11 @@ export default function MasonryGallery({ media, isAdmin = false, onMediaDeleted 
     const visible = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
     const hasMore = visibleCount < filtered.length
 
-    // Only sign URLs for the visible slice — big speed win for large rooms
+    // Only sign original URLs for visible slice (used in lightbox + fallback for grid)
     const visibleUrls  = visible.map(m => m.url)
     const signedUrlMap = useSignedUrls(visibleUrls)
 
-    // Lightbox slides — full filtered list; signed URLs are served from cache for visible items
+    // Lightbox slides — full filtered list; always use original URL (full quality)
     const slides = filtered.map(item => {
         const resolved = signedUrlMap[item.url] ?? item.url
         if (item.type === 'video') {
@@ -220,7 +221,9 @@ export default function MasonryGallery({ media, isAdmin = false, onMediaDeleted 
                 ) : (
                     <motion.div key={`grid-${filter}`} initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }} transition={{ duration:0.2 }} className="masonry-grid">
                         {visible.map((item) => {
-                            const src     = signedUrlMap[item.url] ?? item.url
+                            // For grid: use thumbnail if available (UploadThing CDN, no signing needed)
+                            // Fallback to signed original for legacy Supabase images without thumbnails
+                            const src     = item.thumbnailUrl ?? (signedUrlMap[item.url] ?? item.url)
                             const loaded  = loadedIds.has(item.id)
                             const isVideo = item.type === 'video'
                             return (

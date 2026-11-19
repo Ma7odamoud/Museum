@@ -27,6 +27,16 @@ export const ourFileRouter = {
             return { success: true, mediaId: media.id };
         }),
 
+    // Thumbnail uploader — uploads WebP thumbnails, returns URL only (no DB write; caller patches via /api/media/[id]/thumbnail)
+    thumbnailUploader: f({ image: { maxFileSize: "2MB" } })
+        .middleware(async () => {
+            return {};
+        })
+        .onUploadComplete(async ({ file }) => {
+            console.log("Thumbnail upload complete:", file.url);
+            return { success: true, url: file.url };
+        }),
+
     // Video uploader — saves to Media table
     videoUploader: f({ video: { maxFileSize: "256MB" } })
         .middleware(async ({ req }) => {
@@ -45,7 +55,7 @@ export const ourFileRouter = {
                 data: { roomId: metadata.roomId, url: file.url, type: "video" },
             });
             console.log("Video upload complete:", media);
-            return { success: true, mediaId: media.id };
+            return { success: true, mediaId: media.id }
         }),
 
     // Cover image uploader — just returns the URL, no DB write (caller saves it)

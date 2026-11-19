@@ -18,12 +18,13 @@ model Room {
 }
 
 model Media {
-  id        String   @id @default(cuid())
-  roomId    String
-  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  url       String   @unique
-  type      String   // 'image' or 'video'
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  roomId       String
+  room         Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  url          String   @unique
+  type         String   // 'image' or 'video'
+  thumbnailUrl String?  // optimized WebP thumbnail (UploadThing URL)
+  createdAt    DateTime @default(now())
 
   @@index([roomId])
 }
