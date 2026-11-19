@@ -6,76 +6,56 @@ const f = createUploadthing();
 
 // FileRouter for your app
 export const ourFileRouter = {
-    // Image uploader
+    // Image uploader — saves to Media table
     imageUploader: f({ image: { maxFileSize: "16MB" } })
         .middleware(async ({ req }) => {
-            // Extract roomId from the URL search params
             const url = new URL(req.url);
             const roomId = url.searchParams.get("roomId");
 
-            if (!roomId) {
-                throw new UploadThingError("Room ID is required");
-            }
+            if (!roomId) throw new UploadThingError("Room ID is required");
 
-            // Verify room exists
-            const room = await prisma.room.findUnique({
-                where: { id: roomId },
-            });
-
-            if (!room) {
-                throw new UploadThingError("Room not found");
-            }
+            const room = await prisma.room.findUnique({ where: { id: roomId } });
+            if (!room) throw new UploadThingError("Room not found");
 
             return { roomId };
         })
         .onUploadComplete(async ({ metadata, file }) => {
-            // Save to Prisma Media table
             const media = await prisma.media.create({
-                data: {
-                    roomId: metadata.roomId,
-                    url: file.url,
-                    type: "image",
-                },
+                data: { roomId: metadata.roomId, url: file.url, type: "image" },
             });
-
             console.log("Image upload complete:", media);
             return { success: true, mediaId: media.id };
         }),
 
-    // Video uploader
+    // Video uploader — saves to Media table
     videoUploader: f({ video: { maxFileSize: "256MB" } })
         .middleware(async ({ req }) => {
-            // Extract roomId from the URL search params
             const url = new URL(req.url);
             const roomId = url.searchParams.get("roomId");
 
-            if (!roomId) {
-                throw new UploadThingError("Room ID is required");
-            }
+            if (!roomId) throw new UploadThingError("Room ID is required");
 
-            // Verify room exists
-            const room = await prisma.room.findUnique({
-                where: { id: roomId },
-            });
-
-            if (!room) {
-                throw new UploadThingError("Room not found");
-            }
+            const room = await prisma.room.findUnique({ where: { id: roomId } });
+            if (!room) throw new UploadThingError("Room not found");
 
             return { roomId };
         })
         .onUploadComplete(async ({ metadata, file }) => {
-            // Save to Prisma Media table
             const media = await prisma.media.create({
-                data: {
-                    roomId: metadata.roomId,
-                    url: file.url,
-                    type: "video",
-                },
+                data: { roomId: metadata.roomId, url: file.url, type: "video" },
             });
-
             console.log("Video upload complete:", media);
             return { success: true, mediaId: media.id };
+        }),
+
+    // Cover image uploader — just returns the URL, no DB write (caller saves it)
+    coverUploader: f({ image: { maxFileSize: "8MB" } })
+        .middleware(async () => {
+            return {}; // No auth needed beyond being on admin page
+        })
+        .onUploadComplete(async ({ file }) => {
+            console.log("Cover upload complete:", file.url);
+            return { success: true, url: file.url };
         }),
 } satisfies FileRouter;
 

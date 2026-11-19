@@ -1,12 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
-
 @layer base {
   body {
-    @apply bg-museum-dark text-museum-ivory font-sans antialiased;
+    @apply bg-museum-sky text-slate-800 font-sans antialiased;
+  }
+
+  .dark body {
+    @apply bg-museum-dark text-museum-ivory;
   }
 
   h1,
@@ -102,28 +106,28 @@
     text-shadow: 0 0 10px rgba(245, 245, 220, 0.3);
   }
 
-  /* Masonry Grid Layout - Switched to Grid for Stability */
+  /* True Masonry Layout using CSS columns — items fill gaps naturally */
   .masonry-grid {
-    display: grid;
-    grid-template-columns: repeat(1, 1fr);
-    gap: 1.5rem;
-    align-items: start;
+    columns: 1;
+    column-gap: 1.25rem;
   }
 
-  @media (min-width: 768px) {
+  @media (min-width: 640px) {
     .masonry-grid {
-      grid-template-columns: repeat(2, 1fr);
+      columns: 2;
     }
   }
 
   @media (min-width: 1024px) {
     .masonry-grid {
-      grid-template-columns: repeat(3, 1fr);
+      columns: 3;
     }
   }
 
   .masonry-item {
-    width: 100%;
+    break-inside: avoid;
+    margin-bottom: 1.25rem;
+    display: block;
   }
 
   /* Fix for UploadThing native input showing up */
@@ -135,5 +139,36 @@
     height: 100% !important;
     cursor: pointer !important;
     z-index: 10 !important;
+  }
+
+  /* ── Native <select> dropdown — dark mode ──────────────────────────────── */
+  /* The OS-rendered dropdown list picks up these colors on most browsers     */
+  .dark select {
+    color-scheme: dark;
+    background-color: #1e2130;
+    color: #f0eee6; /* museum-cream */
+  }
+
+  .dark select option {
+    background-color: #1e2130;
+    color: #f0eee6;
+  }
+
+  .dark select option:hover,
+  .dark select option:checked {
+    background-color: #e11d48;
+    color: #ffffff;
+  }
+
+  /* Light mode — keep crisp */
+  select {
+    color-scheme: light;
+    background-color: rgba(255,255,255,0.8);
+    color: #1e293b;
+  }
+
+  select option {
+    background-color: #ffffff;
+    color: #1e293b;
   }
 }

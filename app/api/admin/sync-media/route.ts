@@ -1,11 +1,16 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAdmin } from '@/lib/admin';
 import fs from 'fs';
 import path from 'path';
 
-export async function POST() {
+export async function POST(request: Request) {
     try {
+        // Require admin access
+        const adminError = await requireAdmin(request)
+        if (adminError) return adminError
+
         const memoriesDir = path.join(process.cwd(), 'public', 'memories');
 
         if (!fs.existsSync(memoriesDir)) {

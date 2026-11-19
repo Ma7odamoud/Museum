@@ -2,43 +2,73 @@
 
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
+import { useSignedUrl } from '@/lib/use-signed-urls'
 
 interface RoomCardProps {
     id: string
     name: string
     slug: string
     coverImage?: string | null
+    mediaCount?: number
+    index?: number
 }
 
-export default function RoomCard({ id, name, slug, coverImage }: RoomCardProps) {
+export default function RoomCard({ id, name, slug, coverImage, mediaCount = 0, index = 0 }: RoomCardProps) {
     const router = useRouter()
-
-    const handleClick = () => {
-        router.push(`/room/${slug}`)
-    }
+    // Resolve cover image to signed URL if it's from private Supabase storage
+    const resolvedCover = useSignedUrl(coverImage ?? '')
 
     return (
         <motion.div
-            className="relative aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer glass-effect museum-shadow group"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            transition={{ duration: 0.3, ease: 'easeOut' }}
-            onClick={handleClick}
+            className="museum-card rounded-2xl overflow-hidden cursor-pointer group"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-50px' }}
+            transition={{ duration: 0.5, delay: index * 0.05 }}
+            whileHover={{ y: -8 }}
+            onClick={() => router.push(`/room/${slug}`)}
         >
-            {/* Cover Image or Placeholder */}
-            {coverImage ? (
-                <Image
-                    src={coverImage}
-                    alt={name}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-110"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                />
-            ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-museum-dark via-museum-darker to-museum-dark flex items-center justify-center">
+            {/* Cover Image */}
+            <div className="relative h-64 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-museum-rose/10 dark:to-museum-rose/5 overflow-hidden">
+                {coverImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={resolvedCover || coverImage}
+                        alt={name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        loading={index < 2 ? 'eager' : 'lazy'}
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-20 w-20 text-slate-400 dark:text-museum-rose/30"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={1.5}
+                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                            />
+                        </svg>
+                    </div>
+                )}
+                {/* Hover gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            </div>
+
+            {/* Room Info */}
+            <div className="p-6">
+                <h3 className="text-xl font-serif text-slate-800 dark:text-museum-cream mb-2 group-hover:text-museum-sky-accent dark:group-hover:text-museum-rose transition-colors">
+                    {name}
+                </h3>
+                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-museum-cream/50">
                     <svg
-                        className="w-16 h-16 text-museum-rose/20"
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -46,30 +76,29 @@ export default function RoomCard({ id, name, slug, coverImage }: RoomCardProps) 
                         <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth={1.5}
+                            strokeWidth={2}
                             d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                         />
                     </svg>
+                    <span>
+                        {mediaCount} {mediaCount === 1 ? 'memory' : 'memories'}
+                    </span>
                 </div>
-            )}
 
-            {/* Overlay gradient */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-            {/* Room name */}
-            <div className="absolute bottom-0 left-0 right-0 p-6">
-                <motion.h3
-                    className="relative transform transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group text-2xl font-serif text-museum-cream"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                >
-                    {name}
-                </motion.h3>
+                {/* Enter Room arrow */}
+                <div className="mt-4 flex items-center gap-2 text-museum-sky-accent dark:text-museum-rose font-medium group-hover:gap-3 transition-all">
+                    <span>Enter Room</span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5 transition-transform group-hover:translate-x-1"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                </div>
             </div>
-
-            {/* Hover border effect */}
-            <div className="absolute inset-0 border-2 border-museum-rose/0 group-hover:border-museum-rose/30 transition-colors duration-300 rounded-2xl pointer-events-none" />
         </motion.div>
     )
 }

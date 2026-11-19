@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/admin'
 
 function generateSlug(name: string): string {
     return name
@@ -10,6 +11,9 @@ function generateSlug(name: string): string {
 
 export async function POST(request: Request) {
     try {
+        const adminError = await requireAdmin(request)
+        if (adminError) return adminError
+
         const body = await request.json()
         const { name, coverImage } = body
 

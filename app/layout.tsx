@@ -15,7 +15,26 @@ export default function RootLayout({
     children: React.ReactNode
 }) {
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning>
+            <head>
+                {/* Anti-FOUC: apply saved theme before React hydrates */}
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `
+                            (function() {
+                                try {
+                                    var saved = localStorage.getItem('theme');
+                                    if (saved === 'dark') {
+                                        document.documentElement.classList.add('dark');
+                                    } else {
+                                        document.documentElement.classList.remove('dark');
+                                    }
+                                } catch(e) {}
+                            })();
+                        `,
+                    }}
+                />
+            </head>
             <body>
                 <ThemeProvider>
                     <ThemeToggle />

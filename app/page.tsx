@@ -5,34 +5,38 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
 export default function GatekeeperPage() {
+    const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
-    const [error, setError] = useState(false)
+    const [errorMsg, setErrorMsg] = useState('')
     const [isUnlocking, setIsUnlocking] = useState(false)
     const router = useRouter()
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault()
+        setErrorMsg('')
+        setIsUnlocking(true)
 
-        if (password === '220810') {
-            setIsUnlocking(true)
-            setError(false)
-
-            // Set authentication cookie
-            const response = await fetch('/api/auth', {
+        try {
+            const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password }),
+                body: JSON.stringify({ email, password }),
             })
 
-            if (response.ok) {
-                setTimeout(() => {
-                    router.push('/hallway')
-                }, 1500)
+            if (!res.ok) {
+                const data = await res.json()
+                setErrorMsg(data.error || 'Wrong password. Try again.')
+                setIsUnlocking(false)
+                return
             }
-        } else {
-            setError(true)
-            setPassword('')
-            setTimeout(() => setError(false), 500)
+
+            // Give the browser a moment to store the cookie, then navigate
+            setTimeout(() => {
+                router.push('/hallway')
+            }, 800)
+        } catch {
+            setErrorMsg('Something went wrong. Please try again.')
+            setIsUnlocking(false)
         }
     }
 
@@ -88,7 +92,7 @@ export default function GatekeeperPage() {
                             </motion.h1>
 
                             <motion.p
-                                className="text-xl md:text-2xl text-slate-600 dark:text-museum-cream/80 max-w-2xl mx-auto font-light leading-relaxed"
+                                className="text-xl md:text-2xl text-slate-600 dark:text-museum-cream/80 max-w-2xl mx-auto font-light leading-relaxed mb-8"
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 transition={{ delay: 0.4, duration: 0.8 }}
@@ -96,7 +100,7 @@ export default function GatekeeperPage() {
                                 A Virtual Memory Museum
                             </motion.p>
 
-                            {/* Password form */}
+                            {/* Login form */}
                             <motion.form
                                 onSubmit={handleSubmit}
                                 className="max-w-md mx-auto"
@@ -104,45 +108,60 @@ export default function GatekeeperPage() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.6, duration: 0.8 }}
                             >
-                                <div className="glass-effect rounded-2xl p-8 museum-shadow">
-                                    <label
-                                        htmlFor="password"
-                                        className="block text-museum-rose text-sm font-medium mb-4 tracking-wider uppercase"
-                                    >
-                                        Enter Access Code
-                                    </label>
+                                <div className="glass-effect rounded-2xl p-8 museum-shadow flex flex-col gap-4">
+                                    <h2 className="text-museum-rose text-lg font-medium tracking-wider uppercase mb-2">
+                                        Authorized Access Only
+                                    </h2>
 
-                                    <motion.input
-                                        id="password"
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => {
-                                            setPassword(e.target.value)
-                                            setError(false) // Clear error on change
-                                        }}
-                                        className={`w-full px-6 py-4 rounded-full bg-white/50 dark:bg-white/5 border ${error ? 'border-red-500' : 'border-slate-300 dark:border-museum-rose/30'
-                                            } text-center text-xl tracking-widest focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose focus:ring-1 focus:ring-museum-sky-accent dark:focus:ring-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30 text-slate-800 dark:text-white`}
-                                        placeholder="Enter access code..."
-                                        animate={error ? { x: [-10, 10, -10, 10, 0] } : {}}
-                                        transition={{ duration: 0.4 }}
-                                        autoFocus
-                                    />
+                                    <div>
+                                        <input
+                                            id="email"
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => {
+                                                setEmail(e.target.value)
+                                                setErrorMsg('')
+                                            }}
+                                            className={`w-full px-6 py-4 rounded-xl bg-white/50 dark:bg-white/5 border ${errorMsg ? 'border-red-500' : 'border-slate-300 dark:border-museum-rose/30'
+                                                } text-center text-lg focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose focus:ring-1 focus:ring-museum-sky-accent dark:focus:ring-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30 text-slate-800 dark:text-white`}
+                                            placeholder="Email address"
+                                            autoFocus
+                                            required
+                                        />
+                                    </div>
 
-                                    {error && (
+                                    <div>
+                                        <input
+                                            id="password"
+                                            type="password"
+                                            value={password}
+                                            onChange={(e) => {
+                                                setPassword(e.target.value)
+                                                setErrorMsg('')
+                                            }}
+                                            className={`w-full px-6 py-4 rounded-xl bg-white/50 dark:bg-white/5 border ${errorMsg ? 'border-red-500' : 'border-slate-300 dark:border-museum-rose/30'
+                                                } text-center text-lg tracking-widest focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose focus:ring-1 focus:ring-museum-sky-accent dark:focus:ring-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30 text-slate-800 dark:text-white`}
+                                            placeholder="Password"
+                                            required
+                                        />
+                                    </div>
+
+                                    {errorMsg && (
                                         <motion.p
                                             initial={{ opacity: 0, y: -10 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            className="text-red-400 text-sm mt-3"
+                                            className="text-red-400 text-sm mt-1"
                                         >
-                                            Incorrect access code
+                                            {errorMsg}
                                         </motion.p>
                                     )}
 
                                     <motion.button
                                         type="submit"
-                                        className="px-8 py-4 rounded-full bg-museum-sky-accent hover:bg-museum-sky-dark dark:bg-museum-rose dark:hover:bg-museum-rose-light text-white font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-museum-sky-accent/20 dark:hover:shadow-museum-rose/20 w-full mt-6"
+                                        className="px-8 py-4 rounded-xl bg-museum-sky-accent hover:bg-museum-sky-dark dark:bg-museum-rose dark:hover:bg-museum-rose-light text-white font-semibold transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-museum-sky-accent/20 dark:hover:shadow-museum-rose/20 w-full mt-2"
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
+                                        disabled={isUnlocking}
                                     >
                                         {isUnlocking ? (
                                             <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto" />

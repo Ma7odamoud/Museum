@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import MasonryGallery from '@/components/MasonryGallery'
 import UploadButton from '@/components/UploadButton'
+import { getCookie } from 'cookies-next'
+import { ADMIN_COOKIE } from '@/lib/auth'
 
 interface Media {
     id: string
@@ -45,6 +47,11 @@ export default function RoomPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isExiting, setIsExiting] = useState(false)
+    const [isAdmin, setIsAdmin] = useState(false)
+
+    useEffect(() => {
+        setIsAdmin(getCookie(ADMIN_COOKIE) === 'admin')
+    }, [])
 
     useEffect(() => {
         async function fetchRoom() {
@@ -85,6 +92,14 @@ export default function RoomPage() {
         } catch (err) {
             console.error('Error refreshing room:', err)
         }
+    }
+
+    // Admin: remove deleted item from local state instantly (no refetch needed)
+    const handleMediaDeleted = (deletedId: string) => {
+        setRoom(prev => {
+            if (!prev) return prev
+            return { ...prev, media: prev.media.filter(m => m.id !== deletedId) }
+        })
     }
 
     return (
@@ -226,7 +241,11 @@ export default function RoomPage() {
 
                                     {/* Gallery - Wrapped in Suspense */}
                                     <Suspense fallback={<GallerySkeleton />}>
-                                        <MasonryGallery media={room.media} />
+                                        <MasonryGallery
+                                            media={room.media}
+                                            isAdmin={isAdmin}
+                                            onMediaDeleted={handleMediaDeleted}
+                                        />
                                     </Suspense>
                                 </motion.div>
                             ) : null}

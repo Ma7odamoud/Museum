@@ -3,8 +3,11 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { getCookie } from 'cookies-next'
 import UploadButton from '@/components/UploadButton'
+import CoverImagePicker from '@/components/CoverImagePicker'
+import { getCookie } from 'cookies-next'
+import { ADMIN_COOKIE } from '@/lib/auth'
+import { useSignedUrls } from '@/lib/use-signed-urls'
 
 interface Media {
     id: string
@@ -20,11 +23,61 @@ interface Room {
     media: Media[]
 }
 
+// Inner component: resolves signed URLs for a single room's media grid
+function RoomMediaGrid({
+    media,
+    onDelete,
+}: {
+    media: Media[]
+    onDelete: (id: string) => void
+}) {
+    const urls = media.map((m) => m.url)
+    const signedMap = useSignedUrls(urls)
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+            {media.map((item) => {
+                const src = signedMap[item.url] ?? item.url
+                return (
+                    <div key={item.id} className="relative group">
+                        <div className="aspect-square rounded-lg overflow-hidden bg-white/5">
+                            {item.type === 'image' ? (
+                                <img
+                                    src={src}
+                                    alt="Media"
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : item.url.includes('youtube.com/embed') ? (
+                                <iframe
+                                    src={src}
+                                    className="w-full h-full"
+                                    allowFullScreen
+                                    title="YouTube video"
+                                />
+                            ) : (
+                                <video
+                                    src={src}
+                                    className="w-full h-full object-cover"
+                                />
+                            )}
+                        </div>
+                        <button
+                            onClick={() => onDelete(item.id)}
+                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
+                        >
+                            ×
+                        </button>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 export default function AdminPage() {
     const router = useRouter()
-    const [isAuthenticated, setIsAuthenticated] = useState(false)
-    const [password, setPassword] = useState('')
-    const [authError, setAuthError] = useState(false)
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+
     const [rooms, setRooms] = useState<Room[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
@@ -48,24 +101,35 @@ export default function AdminPage() {
     const [mediaUrl, setMediaUrl] = useState('')
     const [mediaType, setMediaType] = useState<'image' | 'video'>('image')
 
+    // YouTube playlist import state
+    const [playlistId, setPlaylistId] = useState('')
+    const [importRoomId, setImportRoomId] = useState('')
+    const [isImporting, setIsImporting] = useState(false)
+
     useEffect(() => {
-        const authCookie = getCookie('museum_auth')
-        if (authCookie === 'authenticated') {
-            setIsAuthenticated(true)
-            fetchRooms()
+        const adminCookie = getCookie(ADMIN_COOKIE)
+        if (adminCookie !== 'admin') {
+            router.push('/')
         } else {
-            setIsLoading(false)
+            setIsAdmin(true)
+            fetchRooms()
         }
-    }, [])
+    }, [router])
 
     const fetchRooms = async () => {
         try {
             const response = await fetch('/api/rooms')
             const data = await response.json()
-            // Fetch media for each room
+            if (!Array.isArray(data)) {
+                console.error('Unexpected rooms response:', data)
+                setIsLoading(false)
+                return
+            }
+            // Fetch media for each room in parallel (but use slug endpoint for full media)
             const roomsWithMedia = await Promise.all(
                 data.map(async (room: Room) => {
                     const roomResponse = await fetch(`/api/rooms/${room.slug}`)
+                    if (!roomResponse.ok) return { ...room, media: [] }
                     return await roomResponse.json()
                 })
             )
@@ -77,24 +141,7 @@ export default function AdminPage() {
         }
     }
 
-    const handleAuth = async (e: FormEvent) => {
-        e.preventDefault()
-        if (password === '220810') {
-            const response = await fetch('/api/auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password }),
-            })
-            if (response.ok) {
-                setIsAuthenticated(true)
-                setAuthError(false)
-                fetchRooms()
-            }
-        } else {
-            setAuthError(true)
-            setPassword('')
-        }
-    }
+    // Auth is now handled by Better Auth / Neon Auth on the Gatekeeper page
 
     const handleCreateRoom = async (e: FormEvent) => {
         e.preventDefault()
@@ -126,7 +173,7 @@ export default function AdminPage() {
 
     const handleUpdateRoom = async (room: Room) => {
         try {
-            await fetch(`/api/rooms/${room.slug}`, {
+            const res = await fetch(`/api/rooms/${room.slug}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -135,10 +182,17 @@ export default function AdminPage() {
                 }),
             })
 
+            if (!res.ok) {
+                const data = await res.json()
+                alert(data.error || 'Failed to update room')
+                return
+            }
+
             setEditingRoom(null)
             fetchRooms()
         } catch (error) {
             console.error('Error updating room:', error)
+            alert('Failed to update room. Please try again.')
         }
     }
 
@@ -148,12 +202,18 @@ export default function AdminPage() {
         }
 
         try {
-            await fetch(`/api/rooms/${room.slug}`, {
+            const res = await fetch(`/api/rooms/${room.slug}`, {
                 method: 'DELETE',
             })
+            if (!res.ok) {
+                const data = await res.json()
+                alert(data.error || 'Failed to delete room')
+                return
+            }
             fetchRooms()
         } catch (error) {
             console.error('Error deleting room:', error)
+            alert('Failed to delete room. Please try again.')
         }
     }
 
@@ -161,7 +221,7 @@ export default function AdminPage() {
         e.preventDefault()
 
         try {
-            await fetch('/api/media/create', {
+            const res = await fetch('/api/media/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -171,11 +231,18 @@ export default function AdminPage() {
                 }),
             })
 
+            if (!res.ok) {
+                const data = await res.json()
+                alert(data.error || 'Failed to add media')
+                return
+            }
+
             setMediaUrl('')
             setSelectedRoomId('')
             fetchRooms()
         } catch (error) {
             console.error('Error adding media:', error)
+            alert('Failed to add media. Please try again.')
         }
     }
 
@@ -214,6 +281,33 @@ export default function AdminPage() {
         }
     }
 
+    const handleImportPlaylist = async (e: FormEvent) => {
+        e.preventDefault()
+        if (!importRoomId || !playlistId.trim()) return
+
+        setIsImporting(true)
+        try {
+            const res = await fetch('/api/admin/import-youtube-playlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playlistId: playlistId.trim(), roomId: importRoomId }),
+            })
+            const data = await res.json()
+            setSyncLogs(data.logs || [])
+            setShowSyncLogs(true)
+            if (res.ok) {
+                setPlaylistId('')
+                setImportRoomId('')
+                fetchRooms()
+            }
+        } catch (error) {
+            console.error('Import error:', error)
+            alert('Failed to import playlist')
+        } finally {
+            setIsImporting(false)
+        }
+    }
+
     const startEdit = (room: Room) => {
         setEditingRoom(room)
         setEditName(room.name)
@@ -232,47 +326,7 @@ export default function AdminPage() {
         })
     }
 
-    if (!isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-museum-sky dark:bg-museum-dark transition-colors duration-500">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="max-w-md w-full px-6"
-                >
-                    <div className="flex justify-center mb-8">
-                        <h1 className="modern-title-bar text-2xl md:text-3xl px-8 py-3">
-                            Admin Access
-                        </h1>
-                    </div>
-                    <form onSubmit={handleAuth} className="glass-effect rounded-2xl p-8">
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className={`w-full bg-white/50 dark:bg-white/5 border ${authError ? 'border-red-500' : 'border-slate-300 dark:border-museum-rose/30'
-                                } rounded-lg px-6 py-4 text-center text-2xl tracking-widest text-slate-800 dark:text-museum-cream focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose focus:ring-1 focus:ring-museum-sky-accent dark:focus:ring-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30`}
-                            placeholder="••••••"
-                            autoFocus
-                        />
-                        {authError && (
-                            <p className="text-red-400 text-sm mt-3 text-center">
-                                Incorrect password
-                            </p>
-                        )}
-                        <button
-                            type="submit"
-                            className="w-full mt-6 bg-museum-sky-accent hover:bg-museum-sky-dark dark:bg-museum-rose dark:hover:bg-museum-rose-light text-white font-semibold py-4 rounded-lg hover:opacity-90 transition-all shadow-lg"
-                        >
-                            Enter Admin
-                        </button>
-                    </form>
-                </motion.div>
-            </div>
-        )
-    }
-
-    if (isLoading) {
+    if (!isAdmin) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-museum-sky dark:bg-museum-dark transition-colors duration-500">
                 <div className="text-center">
@@ -281,7 +335,7 @@ export default function AdminPage() {
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                     />
-                    <p className="text-slate-600 dark:text-museum-rose/60">Loading...</p>
+                    <p className="text-slate-600 dark:text-museum-rose/60">Verifying access...</p>
                 </div>
             </div>
         )
@@ -342,15 +396,10 @@ export default function AdminPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-slate-600 dark:text-museum-cream/70 text-sm mb-2">
-                                    Cover Image URL
-                                </label>
-                                <input
-                                    type="url"
+                                <CoverImagePicker
                                     value={newRoomCover}
-                                    onChange={(e) => setNewRoomCover(e.target.value)}
-                                    className="w-full bg-white/50 dark:bg-white/5 border border-slate-300 dark:border-museum-rose/30 rounded-lg px-4 py-3 text-slate-800 dark:text-museum-cream focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30"
-                                    placeholder="https://..."
+                                    onChange={setNewRoomCover}
+                                    label="Cover Image"
                                 />
                             </div>
                         </div>
@@ -470,6 +519,73 @@ export default function AdminPage() {
                     </form>
                 </motion.section>
 
+                {/* Import YouTube Playlist */}
+                <motion.section
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                    className="mb-12"
+                >
+                    <h2 className="text-2xl font-serif text-museum-sky-accent dark:text-museum-rose mb-6">📺 Import YouTube Playlist</h2>
+                    <form onSubmit={handleImportPlaylist} className="glass-effect rounded-2xl p-6">
+                        <p className="text-slate-500 dark:text-museum-cream/50 text-sm mb-4">
+                            Paste a YouTube Playlist ID to automatically import all videos into a room.
+                        </p>
+                        <div className="grid md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-slate-600 dark:text-museum-cream/70 text-sm mb-2">
+                                    Select Room *
+                                </label>
+                                <select
+                                    value={importRoomId}
+                                    onChange={(e) => setImportRoomId(e.target.value)}
+                                    className="w-full bg-white/50 dark:bg-white/5 border border-slate-300 dark:border-museum-rose/30 rounded-lg px-4 py-3 text-slate-800 dark:text-museum-cream focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose transition-all"
+                                    required
+                                >
+                                    <option value="">Choose a room...</option>
+                                    {rooms.map((room) => (
+                                        <option key={room.id} value={room.id}>
+                                            {room.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-slate-600 dark:text-museum-cream/70 text-sm mb-2">
+                                    YouTube Playlist ID *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={playlistId}
+                                    onChange={(e) => setPlaylistId(e.target.value)}
+                                    className="w-full bg-white/50 dark:bg-white/5 border border-slate-300 dark:border-museum-rose/30 rounded-lg px-4 py-3 text-slate-800 dark:text-museum-cream focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30"
+                                    placeholder="PLxxxxxxxxxxxxxxxx"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <button
+                            type="submit"
+                            disabled={isImporting}
+                            className="px-6 py-3 rounded-lg bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500 text-white font-semibold hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {isImporting ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Importing...
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z" />
+                                    </svg>
+                                    Import Playlist
+                                </>
+                            )}
+                        </button>
+                    </form>
+                </motion.section>
+
                 {/* Existing Rooms */}
                 <motion.section
                     initial={{ opacity: 0, y: 20 }}
@@ -495,14 +611,10 @@ export default function AdminPage() {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-slate-800 dark:text-museum-cream/70 text-sm mb-2">
-                                                    Cover Image URL
-                                                </label>
-                                                <input
-                                                    type="url"
+                                                <CoverImagePicker
                                                     value={editCover}
-                                                    onChange={(e) => setEditCover(e.target.value)}
-                                                    className="w-full bg-white/50 dark:bg-white/5 border border-slate-300 dark:border-museum-rose/30 rounded-lg px-4 py-3 text-slate-800 dark:text-museum-cream focus:outline-none focus:border-museum-sky-accent dark:focus:border-museum-rose transition-all placeholder:text-slate-400 dark:placeholder:text-museum-cream/30"
+                                                    onChange={setEditCover}
+                                                    label="Cover Image"
                                                 />
                                             </div>
                                         </div>
@@ -571,32 +683,10 @@ export default function AdminPage() {
 
                                         {/* Media items */}
                                         {room.media.length > 0 && expandedRooms.has(room.id) && (
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                                                {room.media.map((media) => (
-                                                    <div key={media.id} className="relative group">
-                                                        <div className="aspect-square rounded-lg overflow-hidden bg-white/5">
-                                                            {media.type === 'image' ? (
-                                                                <img
-                                                                    src={media.url}
-                                                                    alt="Media"
-                                                                    className="w-full h-full object-cover"
-                                                                />
-                                                            ) : (
-                                                                <video
-                                                                    src={media.url}
-                                                                    className="w-full h-full object-cover"
-                                                                />
-                                                            )}
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleDeleteMedia(media.id)}
-                                                            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            <RoomMediaGrid
+                                                media={room.media}
+                                                onDelete={handleDeleteMedia}
+                                            />
                                         )}
                                     </div>
                                 )

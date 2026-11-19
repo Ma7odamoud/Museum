@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,8 @@ export async function PUT(
     { params }: { params: { slug: string } }
 ) {
     try {
+        const adminError = await requireAdmin(request)
+        if (adminError) return adminError
         const body = await request.json()
         const { name, coverImage } = body
 
@@ -110,6 +113,8 @@ export async function DELETE(
     { params }: { params: { slug: string } }
 ) {
     try {
+        const adminError = await requireAdmin(request)
+        if (adminError) return adminError
         // Find the room by slug first
         const room = await prisma.room.findUnique({
             where: { slug: params.slug },
